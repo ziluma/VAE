@@ -16,12 +16,14 @@ class VAEConfig:
     dropout = 0.1
     act = nn.ReLU
 
+
 def conv_block(in_ch, out_ch, kernel_size, stride, pad=1, transpose=False, act=nn.ReLU):
     conv = nn.ConvTranspose2d if transpose else nn.Conv2d
     return nn.Sequential(
         conv(in_ch, out_ch, kernel_size, stride, padding=pad),
         act()
     )
+
 
 class Encoder(nn.Module):
     def __init__(self, config: VAEConfig):
@@ -41,7 +43,8 @@ class Encoder(nn.Module):
         h = self.net(x)
         mean = self.c_mean(h)
         logvar = self.c_logvar(h)
-        return h, mean, logvar
+        return mean, logvar
+
 
 class Decoder(nn.Module):
     def __init__(self, config: VAEConfig):
@@ -53,13 +56,33 @@ class Decoder(nn.Module):
             Rearrange('b (c h w) -> b c h w', c=C, h=W, w=W),
             conv_block(config.ch_decs[0], config.ch_decs[1], 3, 1, act=config.act),
             conv_block(config.ch_decs[1], config.ch_decs[2], 4, 2, transpose=True, act=config.act),
-            conv_block(config.ch_decs[2], config.ch_img, 4, 2, transpose=True, act=config.act),
+            conv_block(config.ch_decs[2], config.ch_img, 4, 2, transpose=True, act=nn.Identity),
             nn.Sigmoid()
         )
     
     def forward(self, z):
-        h = self.fc(z)
-        h = h.view(-1, self.config.ch_encs[2], self.config.img_size // 4, self.config.img_size // 4)
-        x_recon = self.net(h)
-        return x_recon
+        return self.net(z)
+    
+
+class VAE(nn.Module):
+    def __init__(self, config: VAEConfig, device):
+        super().__init__()
+        self.encoder = Encoder(config).to(device)
+        self.decoder = Decoder(config).to(device)
+    
+    def sample(self, mu, logvar):
+        ''' q(z | x) = N(z | mu, var) '''
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x):
+        mu, logvar = self.encoder(x)
+        z = self.sample(mu, logvar)
+        x_recon = self.decoder(z)
+
+        loss_recon = F.binary_cross_entropy(x_recon, x, reduction='sum') / x.shape[0]
+        loss_KL = .5 * torch.sum(mu**2 + logvar.exp() - logvar) / x.shape[0]
+
+        return loss_recon + loss_KL
 
