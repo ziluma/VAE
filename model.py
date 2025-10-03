@@ -67,10 +67,12 @@ class Decoder(nn.Module):
 class VAE(nn.Module):
     def __init__(self, config: VAEConfig, device):
         super().__init__()
+        self.config = config
+        self.device = device
         self.encoder = Encoder(config).to(device)
         self.decoder = Decoder(config).to(device)
     
-    def sample(self, mu, logvar):
+    def q_sample(self, mu, logvar):
         ''' q(z | x) = N(z | mu, var) '''
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
@@ -78,11 +80,26 @@ class VAE(nn.Module):
 
     def forward(self, x):
         mu, logvar = self.encoder(x)
-        z = self.sample(mu, logvar)
+        z = self.q_sample(mu, logvar)
         x_recon = self.decoder(z)
 
-        loss_recon = F.binary_cross_entropy(x_recon, x, reduction='sum') / x.shape[0]
-        loss_KL = .5 * torch.sum(mu**2 + logvar.exp() - logvar) / x.shape[0]
+        loss_recon = F.binary_cross_entropy(x_recon, x, reduction='sum') 
+        loss_KL = .5 * torch.sum(mu**2 + logvar.exp() + 1 - logvar)
 
-        return loss_recon + loss_KL
+        return (loss_recon + loss_KL) / x.size(0)
 
+    @torch.no_grad()
+    def sample(self, n=16):
+        z = torch.randn(n, self.config.latent_dim).to(self.device)
+        return self.decoder(z)
+
+
+# sanity check
+if __name__ == '__main__':
+    config = VAEConfig()
+    device = 'mps'
+    vae = VAE(config, device).to(device)
+    x = torch.randn(4, 1, 28, 28).to(device)
+    print(vae(x))
+    xh = vae.sample(4)
+    print(xh.shape)
