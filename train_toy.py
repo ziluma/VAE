@@ -20,6 +20,7 @@ torch.manual_seed(666)
 
 # IO
 print_every = 100
+sample_every = 5 # sample every ? epochs   
 
 # training
 lr = 1e-3
@@ -27,14 +28,14 @@ weight_decay = 1e-4
 n_epochs = 20
 
 transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Lambda(lambda x: x * 2.0 - 1.0),
+    transforms.ToTensor()
+    # transforms.Lambda(lambda x: x * 2.0 - 1.0),
 ])
 
 train_set = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
 train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
 
-vae = VAE(config).to(device)
+vae = VAE(config, device).to(device)
 optim = torch.optim.AdamW(vae.parameters(), lr=lr, weight_decay=weight_decay)
 
 check_dir = './ckpt'
@@ -59,6 +60,7 @@ for epoch in range(1, n_epochs+1):
         global_step += 1
 
     with torch.no_grad():
+        if epoch % sample_every != 0: continue
         samples = vae.sample()
         grid = vutils.make_grid(samples, nrow=4)
         out_path = os.path.join(sample_dir, f"samples_epoch_{epoch:03d}.png")
