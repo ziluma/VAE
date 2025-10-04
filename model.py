@@ -6,8 +6,7 @@ from einops.layers.torch import Rearrange
 
 @dataclass
 class VAEConfig:
-    latent_dim = 128
-    hidden_dim = 256
+    latent_dim = 256
     ch_img = 1
     img_size = 28
     ch_encs = [32, 64, 128]
@@ -83,10 +82,10 @@ class VAE(nn.Module):
         z = self.q_sample(mu, logvar)
         x_recon = self.decoder(z)
 
-        loss_recon = F.binary_cross_entropy(x_recon, x, reduction='sum') 
-        loss_KL = .5 * torch.sum(mu**2 + logvar.exp() + 1 - logvar)
+        loss_recon = F.binary_cross_entropy(x_recon, x, reduction='sum') / x.size(0)
+        loss_KL = .5 * torch.sum(mu**2 + logvar.exp() + 1 - logvar) / x.size(0)
 
-        return (loss_recon + loss_KL) / x.size(0)
+        return loss_recon, loss_KL
 
     @torch.no_grad()
     def sample(self, n=16):

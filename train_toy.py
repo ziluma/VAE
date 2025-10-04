@@ -19,13 +19,13 @@ elif torch.backends.mps.is_available():
 torch.manual_seed(666)
 
 # IO
-print_every = 100
-sample_every = 5 # sample every ? epochs   
+print_every = 200
+sample_every = 10 # sample every ? epochs   
 
 # training
 lr = 1e-3
 weight_decay = 1e-4
-n_epochs = 20
+n_epochs = 30
 
 transform = transforms.Compose([
     transforms.ToTensor()
@@ -49,14 +49,15 @@ for epoch in range(1, n_epochs+1):
     vae.train()
     for x, _ in train_loader:
         x = x.to(device)
-        loss = vae(x)
+        loss_recon, loss_KL = vae(x)
+        loss = loss_recon + loss_KL
         optim.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(vae.parameters(), 1.0)
         optim.step()
 
         if global_step % print_every == 0:
-            print(f"epoch {epoch} step {global_step}: loss={loss.item():.4f}")
+            print(f"epoch {epoch} step {global_step}: loss_recon={loss_recon.item():.4f}, loss_KL={loss_KL.item():.4f}, loss={loss.item():.4f}")
         global_step += 1
 
     with torch.no_grad():
